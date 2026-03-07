@@ -3,6 +3,7 @@ import express from "express";
 import path from "path";
 import { fileURLToPath } from "url";
 import { createWfDataProvider } from "./src/data-provider.js";
+import { buildDashboardSpec } from "./src/agent/build-dashboard.js";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const app = express();
@@ -33,6 +34,28 @@ app.post("/api/runQuery", async (req, res) => {
   } catch (err) {
     console.error(err);
     res.status(500).json({ error: err instanceof Error ? err.message : String(err) });
+  }
+});
+
+/**
+ * POST /api/generateSpec
+ * Body: { prompt: string }
+ * Uses a server-side OpenAI agent that consumes the reporting MCP contract
+ * to build and validate a ReportSpec. Returns { spec, validationMeta } or { error }.
+ */
+app.post("/api/generateSpec", async (req, res) => {
+  try {
+    const { prompt } = req.body;
+    if (!prompt || typeof prompt !== "string" || !prompt.trim()) {
+      return res.status(400).json({ error: "prompt is required" });
+    }
+    const result = await buildDashboardSpec({ prompt: prompt.trim() });
+    res.json(result);
+  } catch (err) {
+    console.error(err);
+    const message = err instanceof Error ? err.message : String(err);
+    const status = message.includes("OPENAI_API_KEY") ? 503 : 502;
+    res.status(status).json({ error: message });
   }
 });
 

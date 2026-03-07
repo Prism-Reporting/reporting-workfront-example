@@ -19,10 +19,13 @@
   "dependencies": {
     "@reporting/core": "file:../reporting/packages/core",
     "@reporting/react-ui": "file:../reporting/packages/react-ui",
+    "@modelcontextprotocol/sdk": "^1.27.1",
     "dotenv": "^16.3.1",
     "express": "^4.18.2",
+    "openai": "^6.4.0",
     "react": "^18.2.0",
-    "react-dom": "^18.2.0"
+    "react-dom": "^18.2.0",
+    "zod": "^3.25.0"
   },
   "devDependencies": {
     "@vitejs/plugin-react": "^4.2.1",

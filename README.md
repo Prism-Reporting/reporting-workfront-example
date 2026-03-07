@@ -1,11 +1,11 @@
 # Reporting Workfront integration
 
-Thin integration that uses [@reporting/core](https://github.com/your-org/reporting-2) and [@reporting/react-ui](https://github.com/your-org/reporting-2) for the report UI, and the Workfront API for data. The app is a React SPA that mounts the shared report renderer; the server exposes a single data API and serves the built frontend.
+Thin integration that uses [@reporting/core](https://github.com/Prism-Reporting/reporting) and [@reporting/react-ui](https://github.com/Prism-Reporting/reporting) for the report UI, and the Workfront API for data. The app is a React SPA that mounts the shared report renderer; the server exposes the data API and a server-side AI agent endpoint for generating report specs from natural language. A chat in the header lets you describe a report (e.g. "tasks by status with date filter") and render the generated spec.
 
 ## Prerequisites
 
 - Node.js >= 18
-- Built `@reporting/core` and `@reporting/react-ui`: from the **reporting-2** repo run `npm run build`, or from this repo run `npm run build` (it builds reporting-2 then the client).
+- Built `@reporting/core` and `@reporting/react-ui`: from the **reporting** repo run `npm run build`, or from this repo run `npm run build` (it builds reporting then the client).
 
 ## Setup
 
@@ -19,11 +19,21 @@ Thin integration that uses [@reporting/core](https://github.com/your-org/reporti
    WF_API_KEY=your_workfront_api_key
    WF_BASE_URL=https://your-instance.workfront.com/api/v1
    ```
+   For the **dashboard-building agent**, add:
+   ```env
+   OPENAI_API_KEY=your_openai_api_key
+   OPENAI_MODEL=gpt-4o-mini
+   ```
+   The agent also starts the local reporting MCP server over stdio. By default it uses:
+   ```env
+   REPORTING_MCP_SERVER_PATH=../reporting/packages/mcp-server/dist/index.js
+   ```
+   Override that only if your MCP server build lives somewhere else.
    Do not commit `.env`; it is gitignored.
 
 ## Build
 
-Builds the reporting-2 packages (core + react-ui) then the Vite client:
+Builds the reporting packages (core, react-ui, mcp-server) then the Vite client:
 
 ```bash
 npm run build
@@ -41,7 +51,7 @@ Then open http://localhost:3000. The server serves the built React app and the d
 
 Two servers (recommended for fast frontend feedback):
 
-- **Backend** (port 3000): `npm run dev:server` — Express with `POST /api/runQuery`.
+- **Backend** (port 3000): `npm run dev:server` — Express with `POST /api/runQuery` and `POST /api/generateSpec` (for MCP-driven dashboard generation).
 - **Frontend** (port 5173): `npm run dev:client` — Vite dev server with proxy to the backend for `/api`.
 
 Run both:
@@ -55,6 +65,9 @@ Open http://localhost:5173. API requests are proxied to port 3000.
 ## API
 
 - **POST /api/runQuery** — Body: `{ name: string, params?: Record<string, unknown> }`. The server creates a Workfront `DataProvider` with `page` and `pageSize` taken from `params` (defaults: page 1, pageSize 20), runs the query, and returns the result array as JSON. Used by the React app’s proxy DataProvider.
+- **POST /api/generateSpec** — Body: `{ prompt: string }`. Runs a server-side OpenAI agent that reads the reporting MCP resources, drafts a ReportSpec, validates it through MCP, and retries if needed. Returns `{ spec, validationMeta }` or `{ error }`. Used by the in-app chat.
+
+The example models how a customer app can own its own agent while treating the reporting MCP server as the source of truth for DSL guidance and validation.
 
 ## Pagination and filtering
 
@@ -71,8 +84,9 @@ The Workfront API key is only used on the server; it is never sent to the browse
 
 ## How it works
 
-- **Server**: Express serves static files from `dist/` (the built React app) and handles `POST /api/runQuery` by creating a WF DataProvider and returning query results as JSON.
+- **Server**: Express serves static files from `dist/` (the built React app), handles `POST /api/runQuery` by creating a WF DataProvider and returning query results as JSON, and handles `POST /api/generateSpec` by running a server-side OpenAI agent that consumes the reporting MCP server over stdio.
 - **Client**: React app that imports `ReportRenderer` and `defaultRegistry` from `@reporting/react-ui`, the report spec from this repo, and a proxy DataProvider that calls `/api/runQuery`. Pagination is a thin wrapper in this app that keeps `page` state and merges it into the query params.
+- **Agent**: Reads `report-spec://v1/...` resources from the reporting MCP server, uses a Workfront query catalog for grounding, calls `validate_report_spec`, and repairs invalid drafts before returning the final spec to the UI.
 
 ### "Workfront API returned HTML instead of JSON"
 
