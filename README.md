@@ -1,5 +1,7 @@
 # Reporting Workfront integration
 
+This is the advanced real-integration example. If you want the easiest repo to demo or learn the reporting flow without external system knowledge, start with `reporting-portfolio-example` first.
+
 Thin integration that uses [@reporting/core](https://github.com/Prism-Reporting/reporting) and [@reporting/react-ui](https://github.com/Prism-Reporting/reporting) for the report UI, and the Workfront API for data. The app is a React SPA that mounts the shared report renderer; the server exposes the data API and a server-side AI agent endpoint for generating report specs from natural language. A chat in the header lets you describe a report (e.g. "tasks by status with date filter") and render the generated spec.
 
 ## Prerequisites
@@ -18,6 +20,10 @@ Thin integration that uses [@reporting/core](https://github.com/Prism-Reporting/
    ```env
    WF_API_KEY=your_workfront_api_key
    WF_BASE_URL=https://your-instance.workfront.com/api/v1
+   ```
+   **Custom form fields (tasks):** Task query results include all Workfront custom form (DE:) values under `customFields`. To restrict which custom fields are returned, set optional:
+   ```env
+   WF_TASK_CUSTOM_FIELDS=DE:CustomText,DE:CustomNumber
    ```
    For the **dashboard-building agent**, add:
    ```env
@@ -79,8 +85,18 @@ The Workfront API key is only used on the server; it is never sent to the browse
 
 ## Tests
 
-- **Unit tests** (mocked API): `npm test`
+- **Unit tests** (mocked API, no credentials needed): `npm test` — runs all tests in `test/` with `fetch` mocked so the Workfront API is never called. Fast and safe for CI.
+- **Integration tests** (real Workfront API): set `RUN_WF_INTEGRATION_TESTS=1` and ensure `.env` has `WF_BASE_URL` and `WF_API_KEY`, then run `RUN_WF_INTEGRATION_TESTS=1 npm run test:integration`. The integration suite is skipped when the env var is not set.
 - **Real API connectivity**: `npm run test:api` — uses your `.env` to verify `WF_BASE_URL` and `WF_API_KEY`.
+
+### Manual API exploration
+
+Scripts in `scripts/explore/` are for **manual runs only** (experimentation, discovery). They use your `.env` and are not part of the test suite. Examples:
+
+- `npm run explore:tasks` — fetch a few tasks with `parameterValues` and print DE: custom field keys seen.
+- `npm run explore:custom-forms` — try ctgy/report endpoints to list custom forms; infer DE: keys from the first task.
+
+Use these to validate API behaviour or to see which custom forms/fields exist before changing the default DLS. See `scripts/explore/README.md` for details.
 
 ## How it works
 

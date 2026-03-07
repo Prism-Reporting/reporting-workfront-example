@@ -2,7 +2,7 @@ import "dotenv/config";
 import express from "express";
 import path from "path";
 import { fileURLToPath } from "url";
-import { createWfDataProvider } from "./src/data-provider.js";
+import { createWfDataProvider, getPreferredIssueCustomFieldKey, getPreferredIssueCustomFieldLabel } from "./src/data-provider.js";
 import { buildDashboardSpec } from "./src/agent/build-dashboard.js";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
@@ -35,6 +35,15 @@ app.post("/api/runQuery", async (req, res) => {
     console.error(err);
     res.status(500).json({ error: err instanceof Error ? err.message : String(err) });
   }
+});
+
+/**
+ * GET /api/issue-custom-field-label
+ * Returns the preferred issue custom field name (DE: key) for use as column label.
+ */
+app.get("/api/issue-custom-field-label", (req, res) => {
+  const label = getPreferredIssueCustomFieldLabel() || getPreferredIssueCustomFieldKey() || "Custom";
+  res.json({ label });
 });
 
 /**

@@ -61,3 +61,29 @@ export async function request(method, path, queryParams = {}) {
 export async function get(path, queryParams = {}) {
   return request("GET", path, queryParams);
 }
+
+/**
+ * GET a single task by ID with optional field set. Used to enrich task/search
+ * results with custom form data (e.g. parameterValues) when not requested in search.
+ * @param {string} taskId - Workfront task ID
+ * @param {string} [fields] - Comma-separated fields (e.g. "parameterValues" or "parameterValues:*")
+ * @returns {Promise<unknown>} API response (often { data: { ... } })
+ */
+export async function getTask(taskId, fields) {
+  const path = `task/${taskId}`;
+  const queryParams = fields ? { fields } : {};
+  return get(path, queryParams);
+}
+
+/**
+ * GET a single issue (optask) by ID with optional field set. Used to enrich
+ * optask/search results with custom form data (e.g. parameterValues).
+ * @param {string} optaskId - Workfront optask/issue ID
+ * @param {string} [fields] - Comma-separated fields (e.g. "parameterValues")
+ * @returns {Promise<unknown>} API response (often { data: { ... } })
+ */
+export async function getOptask(optaskId, fields) {
+  const path = `optask/${optaskId}`;
+  const queryParams = fields ? { fields } : {};
+  return get(path, queryParams);
+}

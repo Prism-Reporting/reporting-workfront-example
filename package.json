@@ -13,8 +13,12 @@
     "dev": "concurrently \"npm run dev:server\" \"npm run dev:client\"",
     "dev:server": "node server.js",
     "dev:client": "vite",
-    "test": "node --test test/wf-integration.test.js",
-    "test:api": "node scripts/verify-api.js"
+    "test": "node --test 'test/*.js'",
+    "test:integration": "node --test test/integration.test.js",
+    "test:api": "node scripts/verify-api.js",
+    "explore:tasks": "node scripts/explore/tasks-with-custom-fields.js",
+    "explore:custom-forms": "node scripts/explore/custom-forms-discovery.js",
+    "explore:issues-custom": "node scripts/explore/issues-custom-fields-discovery.js"
   },
   "dependencies": {
     "@reporting/core": "file:../reporting/packages/core",

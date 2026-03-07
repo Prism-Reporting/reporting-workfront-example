@@ -1,6 +1,6 @@
-import { useMemo, useState } from "react";
+import { useMemo, useState, useEffect } from "react";
 import { ReportRenderer, defaultRegistry } from "@reporting/react-ui";
-import { tasksByStatusSpec } from "./report-spec.js";
+import { issuesByProjectSpec } from "./report-spec.js";
 
 function createDataProvider() {
   return {
@@ -19,9 +19,30 @@ function createDataProvider() {
   };
 }
 
+/** Set column label for columns with key "customField" to the actual field name. */
+function specWithCustomFieldLabel(spec, customFieldLabel) {
+  if (!spec || customFieldLabel === "Custom") return spec;
+  const widgets = spec.widgets?.map((w) => {
+    if (w.type !== "table" || !Array.isArray(w.config?.columns)) return w;
+    const columns = w.config.columns.map((col) =>
+      col.key === "customField" ? { ...col, label: customFieldLabel } : col
+    );
+    return { ...w, config: { ...w.config, columns } };
+  });
+  return { ...spec, widgets };
+}
+
 export default function App() {
   const dataProvider = useMemo(() => createDataProvider(), []);
-  const [spec, setSpec] = useState(tasksByStatusSpec);
+  const [spec, setSpec] = useState(issuesByProjectSpec);
+  const [customFieldLabel, setCustomFieldLabel] = useState("Custom");
+
+  useEffect(() => {
+    fetch("/api/issue-custom-field-label")
+      .then((r) => (r.ok ? r.json() : {}))
+      .then((d) => d.label && setCustomFieldLabel(d.label))
+      .catch(() => {});
+  }, []);
   const [prompt, setPrompt] = useState("");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
@@ -60,7 +81,7 @@ export default function App() {
             type="text"
             value={prompt}
             onChange={(e) => setPrompt(e.target.value)}
-            placeholder="Describe the report (e.g. tasks by status with date filter)"
+            placeholder="Describe the report (e.g. issues grouped by project, tasks by status)"
             disabled={loading}
             style={{ flex: "1 1 200px", minWidth: 200, padding: "8px 12px", fontSize: 14 }}
           />
@@ -74,7 +95,7 @@ export default function App() {
       </header>
       <main style={{ flex: 1 }}>
         <ReportRenderer
-          spec={spec}
+          spec={specWithCustomFieldLabel(spec, customFieldLabel)}
           dataProvider={dataProvider}
           registry={defaultRegistry}
         />
