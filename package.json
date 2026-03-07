@@ -7,7 +7,7 @@
     "node": ">=18"
   },
   "scripts": {
-    "build": "npm run build --prefix ../reporting-2 && vite build",
+    "build": "npm run build --prefix ../reporting && vite build",
     "build:client": "vite build",
     "start": "node server.js",
     "dev": "concurrently \"npm run dev:server\" \"npm run dev:client\"",
@@ -17,8 +17,8 @@
     "test:api": "node scripts/verify-api.js"
   },
   "dependencies": {
-    "@reporting/core": "file:../reporting-2/packages/core",
-    "@reporting/react-ui": "file:../reporting-2/packages/react-ui",
+    "@reporting/core": "file:../reporting/packages/core",
+    "@reporting/react-ui": "file:../reporting/packages/react-ui",
     "dotenv": "^16.3.1",
     "express": "^4.18.2",
     "react": "^18.2.0",
