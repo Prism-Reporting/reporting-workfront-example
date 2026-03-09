@@ -21,20 +21,25 @@
     "explore:issues-custom": "node scripts/explore/issues-custom-fields-discovery.js"
   },
   "dependencies": {
+    "@ai-sdk/react": "^1.0.0",
+    "@modelcontextprotocol/sdk": "^1.27.1",
+    "@openai/agents": "^0.5.4",
     "@reporting/core": "file:../reporting/packages/core",
     "@reporting/react-ui": "file:../reporting/packages/react-ui",
-    "@modelcontextprotocol/sdk": "^1.27.1",
+    "ai": "^5.0.0",
     "dotenv": "^16.3.1",
     "express": "^4.18.2",
     "openai": "^6.4.0",
     "react": "^18.2.0",
     "react-dom": "^18.2.0",
-    "zod": "^3.25.0"
+    "zod": "^4.3.6"
   },
   "devDependencies": {
+    "@tailwindcss/vite": "^4.2.1",
     "@vitejs/plugin-react": "^4.2.1",
     "concurrently": "^8.2.2",
     "nodemon": "^3.1.0",
+    "tailwindcss": "^4.2.1",
     "vite": "^5.0.0"
   }
 }

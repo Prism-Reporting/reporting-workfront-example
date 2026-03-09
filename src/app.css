@@ -1,0 +1,29 @@
+@import "tailwindcss";
+
+@theme {
+  --font-sans: "Inter", "Segoe UI", sans-serif;
+}
+
+@layer base {
+  :root {
+    color-scheme: light;
+  }
+
+  html {
+    background: #f8fafc;
+  }
+
+  body {
+    min-width: 320px;
+    background:
+      radial-gradient(circle at top, rgba(59, 130, 246, 0.08), transparent 40%),
+      #f8fafc;
+    color: #0f172a;
+  }
+
+  button,
+  input,
+  textarea {
+    font: inherit;
+  }
+}

@@ -1,41 +1,17 @@
-import OpenAI from "openai";
-import path from "path";
-import { fileURLToPath } from "url";
-import { Client } from "@modelcontextprotocol/sdk/client/index.js";
-import { StdioClientTransport } from "@modelcontextprotocol/sdk/client/stdio.js";
+import { Agent, MCPServerStreamableHttp, run, tool } from "@openai/agents";
+import { OpenAIProvider } from "@openai/agents-openai";
 import { validateReportSpec } from "@reporting/core";
 import { getWorkfrontQueryCatalog } from "../query-catalog.js";
 
-const __dirname = path.dirname(fileURLToPath(import.meta.url));
-const DEFAULT_MCP_SERVER_PATH = path.resolve(
-  __dirname,
-  "../../../reporting/packages/mcp-server/dist/index.js"
-);
 const DEFAULT_MODEL = "gpt-4o-mini";
-const MAX_ATTEMPTS = 3;
+const MAX_AGENT_TURNS = 25;
+const REPORTING_HOST_CONTEXT_HEADER = "x-reporting-host-context";
 
-function getReportingMcpServerPath() {
-  const configuredPath = process.env.REPORTING_MCP_SERVER_PATH;
-
-  if (!configuredPath) {
-    return DEFAULT_MCP_SERVER_PATH;
-  }
-
-  return path.isAbsolute(configuredPath)
-    ? configuredPath
-    : path.resolve(process.cwd(), configuredPath);
+export function serializeReportingHostContext(hostContext) {
+  return Buffer.from(JSON.stringify(hostContext), "utf8").toString("base64url");
 }
 
-function getChildProcessEnv(queryCatalog) {
-  return Object.fromEntries(
-    Object.entries({
-      ...process.env,
-      REPORTING_QUERY_CATALOG_JSON: JSON.stringify(queryCatalog),
-    }).filter((entry) => typeof entry[1] === "string")
-  );
-}
-
-function extractJsonObject(text) {
+export function extractJsonObject(text) {
   const trimmed = text.trim();
   const fencedMatch = trimmed.match(/```(?:json)?\s*([\s\S]*?)```/i);
   const candidate = fencedMatch ? fencedMatch[1].trim() : trimmed;
@@ -52,64 +28,7 @@ function extractJsonObject(text) {
   }
 }
 
-async function readTextResource(client, uri) {
-  const result = await client.readResource({ uri });
-  const textContent = result.contents.find((content) => "text" in content);
-
-  if (!textContent || !("text" in textContent)) {
-    throw new Error(`Resource ${uri} did not return text content`);
-  }
-
-  return textContent.text;
-}
-
-async function callJsonTool(client, name, args = {}) {
-  const result = await client.callTool({
-    name,
-    arguments: args,
-  });
-  const textContent = result.content.find((content) => content.type === "text");
-
-  if (!textContent) {
-    throw new Error(`Tool ${name} did not return text content`);
-  }
-
-  return JSON.parse(textContent.text);
-}
-
-async function withReportingMcpClient(queryCatalog, fn) {
-  const serverPath = getReportingMcpServerPath();
-  const transport = new StdioClientTransport({
-    command: process.env.REPORTING_MCP_COMMAND || "node",
-    args: [serverPath],
-    cwd: path.dirname(serverPath),
-    env: getChildProcessEnv(queryCatalog),
-    stderr: "pipe",
-  });
-  const client = new Client({
-    name: "reporting-workfront-agent",
-    version: "0.1.0",
-  });
-
-  if (transport.stderr) {
-    transport.stderr.on("data", (chunk) => {
-      const message = String(chunk).trim();
-      if (message) {
-        console.error(`[reporting-mcp] ${message}`);
-      }
-    });
-  }
-
-  await client.connect(transport);
-
-  try {
-    return await fn(client, serverPath);
-  } finally {
-    await client.close();
-  }
-}
-
-function formatDiagnostics(diagnostics) {
+export function formatDiagnostics(diagnostics) {
   if (!Array.isArray(diagnostics) || diagnostics.length === 0) {
     return "No diagnostics provided.";
   }
@@ -128,193 +47,206 @@ function formatDiagnostics(diagnostics) {
     .join("\n");
 }
 
-function buildDraftPrompt({
-  prompt,
-  guide,
-  schema,
-  basicExample,
-  queryCatalog,
-  availableQueries,
-  queryDetails,
-  previousAttempt,
-}) {
-  const sections = [
-    "User request:",
-    prompt,
-    "",
-    "Authoring guide:",
-    guide,
-    "",
-    "JSON schema:",
-    schema,
-    "",
-    "Reference example:",
-    basicExample,
-    "",
-    "Query catalog resource:",
-    queryCatalog,
-    "",
-    "Available queries tool result:",
-    JSON.stringify(availableQueries, null, 2),
-    "",
-    "Query detail tool result:",
-    JSON.stringify(queryDetails, null, 2),
-  ];
+function getValidationContext(queryCatalog) {
+  return {
+    availableQueries: queryCatalog.queries.map((query) => query.name),
+    availableFields: Object.fromEntries(
+      queryCatalog.queries.map((query) => [query.name, query.fields ?? []])
+    ),
+  };
+}
 
-  if (previousAttempt) {
-    sections.push(
-      "",
-      "Your previous draft was invalid. Fix it using these diagnostics.",
-      `Previous draft:\n${JSON.stringify(previousAttempt.spec, null, 2)}`,
-      `Diagnostics:\n${formatDiagnostics(previousAttempt.validation.diagnostics)}`
+function parseMcpJsonContent(content, toolName) {
+  const textContent = content.find((item) => item.type === "text");
+  if (!textContent) {
+    throw new Error(`Tool ${toolName} did not return text content`);
+  }
+  return JSON.parse(textContent.text);
+}
+
+async function validateFinalSpec({ mcpServer, queryCatalog, spec }) {
+  const validation = parseMcpJsonContent(
+    await mcpServer.callTool("validate_report_spec", { spec }),
+    "validate_report_spec"
+  );
+
+  if (!validation.valid) {
+    throw new Error(
+      `build_report rejected invalid ReportSpec: ${formatDiagnostics(validation.diagnostics)}`
     );
   }
 
-  sections.push(
-    "",
-    "Return only a single JSON object that matches ReportSpec v1.",
-    "Do not wrap the JSON in markdown fences.",
-    "Do not invent query names or field names outside the published query catalog."
-  );
-
-  return sections.join("\n");
-}
-
-async function draftSpec({
-  client,
-  openai,
-  model,
-  prompt,
-  guide,
-  schema,
-  basicExample,
-  queryCatalog,
-  availableQueries,
-  queryDetails,
-  previousAttempt,
-}) {
-  const response = await openai.responses.create({
-    model,
-    input: [
-      {
-        role: "system",
-        content: [
-          {
-            type: "input_text",
-            text:
-              "You are a dashboard authoring agent for Prism Reporting. Build a valid ReportSpec JSON object only. Prefer the smallest correct spec that satisfies the user request.",
-          },
-        ],
-      },
-      {
-        role: "user",
-        content: [
-          {
-            type: "input_text",
-            text: buildDraftPrompt({
-              prompt,
-              guide,
-              schema,
-              basicExample,
-              queryCatalog,
-              availableQueries,
-              queryDetails,
-              previousAttempt,
-            }),
-          },
-        ],
-      },
-    ],
-  });
-
-  const outputText = response.output_text?.trim();
-  if (!outputText) {
-    throw new Error("OpenAI did not return any text output");
+  const localValidation = validateReportSpec(spec, getValidationContext(queryCatalog));
+  if (!localValidation.valid) {
+    throw new Error(
+      `Spec passed MCP validation but failed local validation: ${localValidation.errors.join("; ")}`
+    );
   }
 
-  return extractJsonObject(outputText);
+  return validation;
 }
 
-export async function buildDashboardSpec({ prompt }) {
-  const apiKey = process.env.OPENAI_API_KEY;
-  if (!apiKey) {
+export function createReportingMcpServer(hostContext, mcpUrl) {
+  return new MCPServerStreamableHttp({
+    url: mcpUrl,
+    name: "reporting-workfront-mcp",
+    requestInit: {
+      headers: {
+        [REPORTING_HOST_CONTEXT_HEADER]: serializeReportingHostContext(hostContext),
+      },
+    },
+  });
+}
+
+export function createBuildReportTool({ mcpServer, queryCatalog, model, mcpUrl }) {
+  return tool({
+    name: "build_report",
+    description:
+      "Submit the final Prism Reporting ReportSpec JSON object. Call this only when the spec is complete and valid.",
+    parameters: {
+      type: "object",
+      properties: {
+        dsl: {
+          type: "string",
+          description: "A JSON string containing the final ReportSpec object.",
+        },
+      },
+      required: ["dsl"],
+      additionalProperties: false,
+    },
+    async execute({ dsl }) {
+      const spec = extractJsonObject(dsl);
+      const validation = await validateFinalSpec({ mcpServer, queryCatalog, spec });
+
+      return JSON.stringify({
+        spec,
+        validationMeta: {
+          model,
+          mcpServerUrl: mcpUrl,
+          validation,
+        },
+      });
+    },
+  });
+}
+
+export function createReportingAgent({ model, mcpServer, buildReportTool }) {
+  return new Agent({
+    name: "Prism Reporting Author",
+    instructions: [
+      "You are a dashboard authoring agent for Prism Reporting.",
+      "Use the reporting MCP tools to inspect the available queries, supported widgets and filters, and example specs before drafting a report.",
+      "Do not answer in prose.",
+      "When the report is ready, call build_report with the final ReportSpec JSON object.",
+      "If build_report rejects the spec, fix the issues and call build_report again.",
+      "Prefer the smallest correct spec that satisfies the user request.",
+    ].join("\n"),
+    model,
+    mcpServers: [mcpServer],
+    tools: [buildReportTool],
+    toolUseBehavior: (_context, toolResults) => {
+      const lastResult = toolResults.at(-1);
+      if (
+        lastResult?.type === "function_output" &&
+        lastResult.tool.name === "build_report" &&
+        typeof lastResult.output === "string"
+      ) {
+        try {
+          const payload = extractJsonObject(lastResult.output);
+          if (payload?.spec && payload?.validationMeta?.validation) {
+            return {
+              isFinalOutput: true,
+              finalOutput: lastResult.output,
+            };
+          }
+        } catch {
+          // Let the model inspect the tool output and repair the spec.
+        }
+      }
+
+      return {
+        isFinalOutput: false,
+      };
+    },
+  });
+}
+
+export async function buildDashboardSpec({ prompt }, overrides = {}) {
+  const trimmedPrompt = prompt?.trim();
+  if (!trimmedPrompt) {
+    throw new Error("prompt is required");
+  }
+
+  const apiKey = overrides.apiKey ?? process.env.OPENAI_API_KEY;
+  if (!apiKey && !overrides.agentModel) {
     throw new Error("OPENAI_API_KEY is not configured");
   }
 
-  const queryCatalog = getWorkfrontQueryCatalog();
-  const openai = new OpenAI({ apiKey });
-  const model = process.env.OPENAI_MODEL || DEFAULT_MODEL;
+  const queryCatalog = overrides.queryCatalog ?? getWorkfrontQueryCatalog();
+  const hostContext = overrides.hostContext ?? {
+    source: "reporting-workfront-example",
+    queryCatalog,
+  };
+  const modelName = overrides.model ?? process.env.OPENAI_MODEL ?? DEFAULT_MODEL;
+  const mcpUrl =
+    overrides.mcpUrl ??
+    process.env.REPORTING_MCP_URL ??
+    "http://127.0.0.1:3000/api/reporting-mcp";
+  const openaiProvider =
+    overrides.openaiProvider ?? new OpenAIProvider({ apiKey });
+  const agentModel =
+    overrides.agentModel ?? (await openaiProvider.getModel(modelName));
+  const createMcpServer =
+    overrides.createReportingMcpServer ?? createReportingMcpServer;
+  const mcpServer =
+    overrides.mcpServer ?? createMcpServer(hostContext, mcpUrl);
+  const buildReportTool =
+    overrides.buildReportTool ??
+    createBuildReportTool({
+      mcpServer,
+      queryCatalog,
+      model: modelName,
+      mcpUrl,
+    });
+  const createAgent =
+    overrides.createReportingAgent ?? createReportingAgent;
+  const agent =
+    overrides.agent ??
+    createAgent({
+      model: agentModel,
+      mcpServer,
+      buildReportTool,
+    });
+  const runAgent = overrides.runAgent ?? run;
 
-  return withReportingMcpClient(queryCatalog, async (client, serverPath) => {
-    const [guide, schema, basicExample, queryCatalogResource] = await Promise.all([
-      readTextResource(client, "report-spec://v1/guide"),
-      readTextResource(client, "report-spec://v1/schema"),
-      readTextResource(client, "report-spec://v1/examples/basic"),
-      readTextResource(client, "report-spec://v1/query-catalog"),
-    ]);
+  await mcpServer.connect();
 
-    const availableQueries = await callJsonTool(client, "list_available_queries");
-    const queryDetails = await Promise.all(
-      queryCatalog.queries.map((query) =>
-        callJsonTool(client, "describe_query", { name: query.name })
-      )
-    );
+  try {
+    const result = await runAgent(agent, trimmedPrompt, {
+      maxTurns: MAX_AGENT_TURNS,
+    });
+    const outputText =
+      typeof result.finalOutput === "string"
+        ? result.finalOutput
+        : JSON.stringify(result.finalOutput);
+    const payload = extractJsonObject(outputText);
 
-    let previousAttempt = null;
-    let finalValidation = null;
-
-    for (let attempt = 1; attempt <= MAX_ATTEMPTS; attempt += 1) {
-      const spec = await draftSpec({
-        client,
-        openai,
-        model,
-        prompt,
-        guide,
-        schema,
-        basicExample,
-        queryCatalog: queryCatalogResource,
-        availableQueries,
-        queryDetails,
-        previousAttempt,
-      });
-
-      const validation = await callJsonTool(client, "validate_report_spec", { spec });
-      finalValidation = validation;
-
-      if (validation.valid) {
-        const localValidation = validateReportSpec(spec, {
-          availableQueries: queryCatalog.queries.map((query) => query.name),
-          availableFields: Object.fromEntries(
-            queryCatalog.queries.map((query) => [query.name, query.fields ?? []])
-          ),
-        });
-
-        if (!localValidation.valid) {
-          throw new Error(
-            `Spec passed MCP validation but failed local validation: ${localValidation.errors.join(
-              "; "
-            )}`
-          );
-        }
-
-        return {
-          spec,
-          validationMeta: {
-            attempts: attempt,
-            model,
-            mcpServerPath: serverPath,
-            validation,
-          },
-        };
-      }
-
-      previousAttempt = { spec, validation };
+    if (!payload?.spec || !payload?.validationMeta?.validation) {
+      throw new Error("Agent did not finish by calling build_report");
     }
 
-    throw new Error(
-      `Unable to generate a valid report spec after ${MAX_ATTEMPTS} attempts: ${formatDiagnostics(
-        finalValidation?.diagnostics
-      )}`
-    );
-  });
+    return {
+      spec: payload.spec,
+      validationMeta: {
+        ...payload.validationMeta,
+        attempts: Array.isArray(result.rawResponses) ? result.rawResponses.length : undefined,
+        maxTurns: MAX_AGENT_TURNS,
+      },
+    };
+  } finally {
+    await mcpServer.close();
+    if (!overrides.openaiProvider && !overrides.agentModel) {
+      await openaiProvider.close().catch(() => undefined);
+    }
+  }
 }
