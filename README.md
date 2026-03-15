@@ -2,12 +2,12 @@
 
 This is the advanced real-integration example. If you want the easiest repo to demo or learn the reporting flow without external system knowledge, start with `reporting-portfolio-example` first.
 
-Thin integration that uses [@reporting/core](https://github.com/Prism-Reporting/reporting) and [@reporting/react-ui](https://github.com/Prism-Reporting/reporting) for the report UI, and the Workfront API for data. The app is a React SPA that mounts the shared report renderer; the server exposes the data API and a server-side AI agent endpoint for generating report specs from natural language. A chat in the header lets you describe a report (e.g. "tasks by status with date filter") and render the generated spec.
+Thin integration that uses [@prism-reporting/core](https://github.com/Prism-Reporting/reporting) and [@prism-reporting/react-ui](https://github.com/Prism-Reporting/reporting) for the report UI, and the Workfront API for data. The app is a React SPA that mounts the shared report renderer; the server exposes the data API and a server-side AI agent endpoint for generating report specs from natural language. A chat in the header lets you describe a report (e.g. "tasks by status with date filter") and render the generated spec.
 
 ## Prerequisites
 
 - Node.js >= 18
-- Built `@reporting/core` and `@reporting/react-ui`: from the **reporting** repo run `npm run build`, or from this repo run `npm run build` (it builds reporting then the client).
+- Built `@prism-reporting/core` and `@prism-reporting/react-ui`: from the **reporting** repo run `npm run build`, or from this repo run `npm run build` (it builds reporting then the client).
 
 ## Setup
 
@@ -101,7 +101,7 @@ Use these to validate API behaviour or to see which custom forms/fields exist be
 ## How it works
 
 - **Server**: Express serves static files from `dist/` (the built React app), handles `POST /api/runQuery` by creating a WF DataProvider and returning query results as JSON, and handles `POST /api/generateSpec` by running a server-side OpenAI agent that consumes the reporting MCP server over stdio.
-- **Client**: React app that imports `ReportRenderer` and `defaultRegistry` from `@reporting/react-ui`, the report spec from this repo, and a proxy DataProvider that calls `/api/runQuery`. Pagination is a thin wrapper in this app that keeps `page` state and merges it into the query params.
+- **Client**: React app that imports `ReportRenderer` and `defaultRegistry` from `@prism-reporting/react-ui`, the report spec from this repo, and a proxy DataProvider that calls `/api/runQuery`. Pagination is a thin wrapper in this app that keeps `page` state and merges it into the query params.
 - **Agent**: Reads `report-spec://v1/...` resources from the reporting MCP server, uses a Workfront query catalog for grounding, calls `validate_report_spec`, and repairs invalid drafts before returning the final spec to the UI.
 
 ### "Workfront API returned HTML instead of JSON"

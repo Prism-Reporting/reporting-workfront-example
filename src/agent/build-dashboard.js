@@ -1,6 +1,6 @@
 import { Agent, MCPServerStreamableHttp, run, tool } from "@openai/agents";
 import { OpenAIProvider } from "@openai/agents-openai";
-import { validateReportSpec } from "@reporting/core";
+import { validateReportSpec } from "@prism-reporting/core";
 import { getWorkfrontQueryCatalog } from "../query-catalog.js";
 
 const DEFAULT_MODEL = "gpt-4o-mini";

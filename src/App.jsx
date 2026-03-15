@@ -1,6 +1,6 @@
 import { useMemo, useState, useEffect } from "react";
 import { useChat } from "@ai-sdk/react";
-import { ReportRenderer, defaultRegistry } from "@reporting/react-ui";
+import { ReportRenderer, defaultRegistry } from "@prism-reporting/react-ui";
 import { issuesByProjectSpec } from "./report-spec.js";
 
 function createDataProvider() {

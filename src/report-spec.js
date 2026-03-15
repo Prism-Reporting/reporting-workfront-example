@@ -54,7 +54,7 @@ export const tasksOnlySpec = {
 /**
  * Default ReportSpec: complex Workfront reporting across Tasks, Projects, and Issues.
  * Uses two-column layout, multiple data sources, several filters, and table + KPI widgets.
- * Shape aligned with @reporting/core and the WF DataProvider (tasks, projects, issues).
+ * Shape aligned with @prism-reporting/core and the WF DataProvider (tasks, projects, issues).
  */
 export const tasksByStatusSpec = {
   id: "workfront-overview",

@@ -1,7 +1,7 @@
 import React from "react";
 import ReactDOM from "react-dom/client";
 import App from "./App.jsx";
-import "@reporting/react-ui/style.css";
+import "@prism-reporting/react-ui/style.css";
 import "./app.css";
 
 ReactDOM.createRoot(document.getElementById("root")).render(
