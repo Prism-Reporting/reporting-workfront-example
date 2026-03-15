@@ -2,50 +2,14 @@
   "version": "0.2.0",
   "configurations": [
     {
-      "name": "Server",
-      "type": "node",
-      "request": "launch",
-      "program": "${workspaceFolder}/server.js",
-      "cwd": "${workspaceFolder}",
-      "console": "integratedTerminal",
-      "envFile": "${workspaceFolder}/.env"
-    },
-    {
-      "name": "Server (watch)",
-      "type": "node",
-      "request": "launch",
-      "runtimeExecutable": "nodemon",
-      "runtimeArgs": ["--watch", "src", "--watch", "server.js", "--ext", "js"],
-      "program": "${workspaceFolder}/server.js",
-      "cwd": "${workspaceFolder}",
-      "console": "integratedTerminal",
-      "envFile": "${workspaceFolder}/.env",
-      "restart": true
-    },
-    {
-      "name": "Client: Vite dev",
+      "name": "App: dev (watch)",
       "type": "node",
       "request": "launch",
       "runtimeExecutable": "npm",
-      "runtimeArgs": ["run", "dev:client"],
-      "cwd": "${workspaceFolder}",
-      "console": "integratedTerminal"
-    },
-    {
-      "name": "Test: API",
-      "type": "node",
-      "request": "launch",
-      "program": "${workspaceFolder}/scripts/verify-api.js",
+      "runtimeArgs": ["run", "dev"],
       "cwd": "${workspaceFolder}",
       "console": "integratedTerminal",
       "envFile": "${workspaceFolder}/.env"
-    }
-  ],
-  "compounds": [
-    {
-      "name": "Server + Client",
-      "configurations": ["Server (watch)", "Client: Vite dev"],
-      "stopAll": true
     }
   ]
 }

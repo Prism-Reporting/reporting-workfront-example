@@ -11,7 +11,7 @@
     "build:client": "vite build",
     "start": "node server.js",
     "dev": "concurrently \"npm run dev:server\" \"npm run dev:client\"",
-    "dev:server": "node server.js",
+    "dev:server": "node --watch server.js",
     "dev:client": "vite",
     "test": "node --test 'test/*.js'",
     "test:integration": "node --test test/integration.test.js",
@@ -38,7 +38,6 @@
     "@tailwindcss/vite": "^4.2.1",
     "@vitejs/plugin-react": "^4.2.1",
     "concurrently": "^8.2.2",
-    "nodemon": "^3.1.0",
     "tailwindcss": "^4.2.1",
     "vite": "^5.0.0"
   }
